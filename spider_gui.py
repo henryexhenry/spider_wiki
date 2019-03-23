@@ -1,13 +1,30 @@
 import tkinter as tk
 import requests
-from bs4 import BeautifulSoup
+from lxml import etree
+import time
+import random
+
+class Node(object):
+    def __init__(self, cat_, layer_):
+        self.cat = cat_
+        self.layer = layer_
+        self.supcats = []
+        
+    def __repr__(self):
+        return "Node: %s" % self.supcats
+    
+    def add_supcat(self, node):
+        self.supcats.append(node) 
+    
+    def get_supcats(self):
+        return self.supcats
 
 class Application:
     def __init__(self, master = None):
 
+        baseURL = 'https://en.wikipedia.org/wiki/Category:'
         HEIGHT = 500
         WIDTH = 600
-        var = 'BFS'
 
         canvas = tk.Canvas(root, height=HEIGHT, width=WIDTH)
         canvas.pack()
@@ -21,13 +38,13 @@ class Application:
 
         label = tk.Label(frame, font=40)
         label.place(relwidth=0.2, relheight=1)
-        label['text'] = "Url: "
+        label['text'] = "Category: "
         entry = tk.Entry(frame, font=40)
         entry.place(relx = 0.2, relwidth=0.8, relheight=1)
 
         frame1 = tk.Frame(root, bd=5)
         frame1.place(relx=0.5, rely=0.2, relwidth=0.5, relheight=0.1, anchor='n')
-        button = tk.Button(frame1, text="Get links", font=40, command=lambda: self.spider(entry.get(), var))
+        button = tk.Button(frame1, text="Get links", font=40, command=lambda: self.DFS(entry.get()))
         button.place(relx=0.3, relheight=0.8, relwidth=0.4)
 
         lower_frame = tk.Frame(root, bg='#80c1ff', bd=10)
@@ -48,62 +65,99 @@ class Application:
                 r2 = tk.Radiobutton(frame2, text='DFS', variable=var, value='DFS')
                 r2.place(relwidth = 0.5, relheight = 1)
         '''
-    def spider(self, L, var):
+    # crawls all subcategories of a category
+    def spider___(self, cat, l, dict_): # -> [subcategoris]
 
-        req = requests.get(L)
-        soup = BeautifulSoup(req.text, "html.parser")
-            
-        if var == 'BFS':
+        cur = Node(cat, l)
 
-            count = 0
-            for i in soup.body.find_all('a', {'class':'CategoryTreeLabelCategory'}):
+        bound_subcats = 3
+        bound_layer = 3        # set boundary
+        
+
+        # *******************   connect wiki   *************************
+
+        time.sleep(random.random()*2)
+
+        print('Connecting.....................')
+        req = requests.get('https://en.wikipedia.org/wiki/Category:' + cat)
+        print('Connected......................')
+        html = etree.HTML(req.text)
+
+        # if element has more than one classes, use contains()
+        print('crawling         ################')
+
+
+
+        # *******************   Crawling content   *************************
+        '''
+        with open('data/'+cat+'.txt', 'w') as f:
+            for i in html.xpath("//div[@id='content']//text()"):
                 try:
-                    self.text.insert(tk.END, i['href'] + '\n')
+                    f.write(i)
+                except:
+                    pass
+        '''
+        if l >= bound_layer:         # set boundary
+            return cur
+
+
+        # *******************   Crawling subcategories   *************************
+        for j, i in enumerate(html.xpath("//a[contains(@class, 'CategoryTreeLabelCategory')]/text()")):
+            
+            if j < bound_subcats:
+            
+                if i not in dict_:          # check duplicate
+
+                    dict_[i] = 1
+                    cur.supcats.append(Node(i, l+1))
+
+        print('crawled          #################')
+
+        return cur
+
+
+
+
+    def DFS(self, cat):
+        print('DFSing..............................')
+        self.text.insert(tk.END, cat + '\n')
+
+        DICT = {}
+
+        head = self.spider___(cat, 0, DICT)
+        node = head
+        stack = []
+        count = 1
+
+        while node.supcats or stack:
+            while node.supcats:
+
+                stack += node.supcats[1:][::-1]
+
+                if node.supcats[0:1]:
+                    print(node.supcats)
+
+                    node = node.supcats[0]
+                    self.text.insert(tk.END, (node.layer) * '  ' + node.cat + '\n')
                     count += 1
-                except(KeyError):
-                    print('KeyError')
-            self.label1['text'] += str(count)
+                    print('layer: ', node.layer)
 
-        # elif var == 'DFS':
-'''#TODO
+                    node = self.spider___(node.cat, node.layer, DICT)
 
-    # Crawl the page and populate the queue with newly found URLs
-    def crawl(L):
+            s = stack.pop()
+            self.text.insert(tk.END, (s.layer) * '  ' + s.cat + '\n')
+            count += 1
 
-        if len(queue) > 999 :
-            return
+            node = self.spider___(s.cat, s.layer, DICT)
 
-        if L in visited:
-            continue
-        else:
-            visited[url] = 1
+            
+        print('DFS end !')
 
-            req = requests.get(L)
-            soup = BeautifulSoup(req.text, "html.parser")
-            urls = soup.findAll("a", {'class':'CategoryTreeLabelCategory'})
-        for i in urls:
-            flag = 0
-            # Complete relative URLs and strip trailing slash
-            complete_url = urljoin(url, i["href"]).rstrip('/')
+        self.label1['text'] = 'Total: '
+        self.label1['text'] += str(count)
 
-            # Check if the URL already exists in the queue
-            for j in queue:
-                if j == complete_url:
-                    flag = 1
-                    break
 
-            # If not found in queue
-            if flag == 0:
-                if len(queue) > 99:
-                    return
-                if (visited_list.count(complete_url)) == 0:
-                    queue.append(complete_url)
 
-        # Pop one URL from the queue from the left side so that it can be crawled
-        current = queue.popleft()
-        # Recursive call to crawl until the queue is populated with 100 URLs
-        crawl(current)
-'''
 
 root = tk.Tk()
 
